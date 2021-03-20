@@ -184,16 +184,16 @@ component max_min
 end component;
 
 
-    type signal_type is(A,B,C,D,E,F,G,H,I,Z); --else
+    type signal_type is(A_RESET,B_LW,C_WW_RL,D_WL_START,E,F,G,H,I,Z); --else
     signal state:signal_type;
     signal max: std_logic_vector (7 downto 0);
     signal min: std_logic_vector (7 downto 0);
     signal mm_en: std_logic;
-    signal width:std_logic_vector (7 downto 0);
-    signal heigth:std_logic_vector (7 downto 0);
-    signal current_address:integer;
-    signal tmp_w:std_logic_vector (7 downto 0);
-    signal tmp_h:std_logic_vector (7 downto 0);
+    signal width:unsigned(7 downto 0);
+    signal heigth:unsigned(7 downto 0);
+    signal current_address:unsigned(15 downto 0);
+    signal tmp_w: unsigned(7 downto 0);
+    signal tmp_h: unsigned(7 downto 0);
     signal hasDone:std_logic;   
     
 begin
@@ -203,8 +203,8 @@ begin
     begin
       
         if(i_rst = '1') then
-            state <= A;
-        elsif falling_edge(i_clk) then
+            state <= A_RESET;
+        elsif rising_edge(i_clk) then
             
         o_en <='0';
         o_done <='0';
@@ -214,57 +214,57 @@ begin
         mm_en <= '0';
         --current_address <=current_address;
         case state is
-            when A=>
+            when A_RESET=>
                 heigth <="00000000";
-                width <= "00000000";
+                width <="00000000";
                 tmp_w <= "00000000";
                 tmp_h <= "00000000";
                 hasDone <='0';
                 
                 if i_start='1' then
-                    state <=B;
+                    state <=B_LW;
                  else
-                    state <=A;
+                    state <=A_RESET;
                 end if;
-            when B=>
+            when B_LW=>
                 o_address <= "0000000000000000";
                 o_en <='1';            
-                state <=C;
-            when C=>
+                state <=C_WW_RL;
+            when C_WW_RL=>
                 if(i_data="00000000") then
                     state <=Z;
                 else
-                    width <= i_data;
-                    tmp_w<=std_logic_vector( unsigned(width) -1 );
+                    width <= unsigned(i_data);
+                    tmp_w<= width - 1 ;
                     o_address <= "0000000000000001";
                     o_en <='1';  
-                    state <=D;
+                    state <=D_WL_START;
                 end if;
                 
-            when D=>              
+            when D_WL_START=>              
                 if(i_data="00000000") then
                     state <=Z;
                 else                
-                    heigth<= i_data;  
+                    heigth<= unsigned(i_data);  
                     tmp_h <=heigth;
                     o_address <= "0000000000000010";
                     o_en <='1'; 
-                                mm_en<='1'; 
-                    current_address <= 3;
+                    mm_en<='1'; 
+                    current_address <= "0000000000000011";
                     state <=E;
                 end if;               
             when E=>
                 
-                if(tmp_h="00000000" and tmp_w="00000000") then
+                if(tmp_h=0 and tmp_w=0) then
                     state <=F;
                 else               
-                    if(tmp_w="00000000") then
+                    if(tmp_w=0) then
                         tmp_w <= width;
-                        tmp_h <=std_logic_vector( unsigned(tmp_h) -1 );
+                        tmp_h <=tmp_h -1;
                     end if;
-                    tmp_w <= std_logic_vector( unsigned(tmp_w) -1 );                    
+                    tmp_w <= tmp_w -1;                    
                     current_address <= current_address+1;
-                    o_address <= std_logic_vector(to_unsigned(current_address,16));
+                    o_address <= std_logic_vector(current_address);
                     o_en <='1';                    
                     mm_en <= '1'; 
                 end if;   
