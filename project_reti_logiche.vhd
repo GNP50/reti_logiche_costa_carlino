@@ -1,77 +1,3 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 21.02.2021 16:29:07
--- Design Name: 
--- Module Name: new_pixel_value - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
-
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
-
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity new_pixel_value is
-    Port ( current_pixel_value : in STD_LOGIC_VECTOR (7 downto 0);
-           min_pixel_value : in STD_LOGIC_VECTOR (7 downto 0);
-           shift_level : in STD_LOGIC_VECTOR (3 downto 0);
-           new_pixel_value : out STD_LOGIC_VECTOR (7 downto 0));
-end new_pixel_value;
-
-architecture Behavioral of new_pixel_value is
-signal diff: STD_LOGIC_VECTOR (15 downto 0);
-signal temp: STD_LOGIC_VECTOR (15 downto 0);
-begin
-    diff(15 downto 8) <= "00000000";
-    diff(7 downto 0) <= current_pixel_value - min_pixel_value;
-    temp <= shl(diff,shift_level);
-    --new_pixel_value <= '11111111' when true else temp (7 downto 0);
-    new_pixel_value <= "11111111" when temp(15 downto 8) /= "00000000" else temp(7 downto 0);
-end Behavioral;
-
-
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 21.02.2021 16:29:07
--- Design Name: 
--- Module Name: new_pixel_value - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -93,32 +19,30 @@ entity max_min is
             i_en : in std_logic;
             i_current_pixel_value : in STD_LOGIC_VECTOR (7 downto 0);
             o_min : out STD_LOGIC_VECTOR (7 downto 0);
-            o_max : out STD_LOGIC_VECTOR (7 downto 0));
+            o_max : out STD_LOGIC_VECTOR (7 downto 0);
+            done : out std_logic
+        );
 end max_min;
 
 architecture Behavioral of max_min is
-    signal max: STD_LOGIC_VECTOR (7 downto 0);
-    signal min: STD_LOGIC_VECTOR (7 downto 0);
+    signal max_s: integer range 0 to 255;
+    signal min_s: integer range 0 to 255;
 begin
     process(i_clk,i_rst)
     begin
+        o_max <= std_logic_vector(to_unsigned(max_s,8));
+        o_min <= std_logic_vector(to_unsigned(min_s,8));
+
         if(i_rst = '1') then
-            min<="11111111";
-            max<="00000000";
+            min_s<=0;
+            max_s<=255;
         elsif falling_edge(i_clk) and i_en='1' then
-            max <= max;
-            min <= min;
-            if(unsigned(i_current_pixel_value)>unsigned(max)) then
-                max <= i_current_pixel_value;
-            end if;  
-            
-            if(unsigned(i_current_pixel_value)<unsigned(min)) then
-                min <= i_current_pixel_value;
+            if(unsigned(i_current_pixel_value)>max_s) then
+                max_s <= to_integer(unsigned(i_current_pixel_value));
+            elsif(unsigned(i_current_pixel_value)<min_s) then
+                min_s <= to_integer(unsigned(i_current_pixel_value));
             end if;  
         end if;
-        o_max <= max;
-        o_min <= min;
-        
     end process;
 end Behavioral;
 
@@ -174,106 +98,162 @@ end project_reti_logiche;
 
 
 architecture Behavioral of project_reti_logiche is
-component max_min
-    Port (  i_clk : in std_logic;
+    type signal_type is(RST,GETWIDTH,GETHEIGTH,READIMAGE,CHANGE_PIXEL_VALUE,WRITE,DATAERROR); --else
+    signal state:signal_type:=RST;
+    
+    component max_min
+    port (  i_clk : in std_logic;
             i_rst : in std_logic;
             i_en : in std_logic;
             i_current_pixel_value : in STD_LOGIC_VECTOR (7 downto 0);
             o_min : out STD_LOGIC_VECTOR (7 downto 0);
-            o_max : out STD_LOGIC_VECTOR (7 downto 0));
-end component;
+            o_max : out STD_LOGIC_VECTOR (7 downto 0)
+    );
+    end component;
 
 
-    type signal_type is(A_RESET,B_LW,C_WW_RL,D_WL_START,E,F,G,H,I,Z); --else
-    signal state:signal_type;
-    signal max: std_logic_vector (7 downto 0);
-    signal min: std_logic_vector (7 downto 0);
-    signal mm_en: std_logic;
-    signal width:unsigned(7 downto 0);
-    signal heigth:unsigned(7 downto 0);
-    signal current_address:unsigned(15 downto 0);
-    signal tmp_w: unsigned(7 downto 0);
-    signal tmp_h: unsigned(7 downto 0);
-    signal hasDone:std_logic;   
+
+    
+    signal mm_en: std_logic := '0';
+    signal width:integer range 0 to 255 := 0;
+    signal heigth:integer range 0 to 255 := 0;
+    signal current_address:integer range 0 to 65535:= 0;
+    signal tmp_w: integer range 0 to 255 := 0;
+    signal tmp_h:integer range 0 to 255 := 0;
+    signal max:std_logic_vector(7 downto 0);
+    signal min:std_logic_vector(7 downto 0);
+    
+    signal hasDone:std_logic := '0';   
+    signal area: integer range 0 to 65535 := 0;
+   
+    
     
 begin
-    mm: max_min PORT MAP (i_clk=>i_clk, i_rst=>i_rst, i_en => mm_en, o_max => max, o_min => min,i_current_pixel_value=>i_data); 
-
+    mm: max_min port map(i_clk,i_rst,mm_en,i_data,max,min); 
+     
     process(i_clk,i_rst)
+    --variables for change values
+    variable delta:integer range 0 to 255 := 0;
+    variable shift_level: integer range 1 to 8 := 0;
+    variable tmp_value:integer range 0 to  7 := 0;
+    
     begin
       
         if(i_rst = '1') then
-            state <= A_RESET;
-        elsif rising_edge(i_clk) then
+            state <= RST;
+        elsif falling_edge(i_clk) then
             
-        o_en <='0';
-        o_done <='0';
-        o_we <='0';
-        o_data <="00000000";
-        o_address <="0000000000000000";
-        mm_en <= '0';
-        --current_address <=current_address;
+       
         case state is
-            when A_RESET=>
-                heigth <="00000000";
-                width <="00000000";
-                tmp_w <= "00000000";
-                tmp_h <= "00000000";
+            when RST=>
+                heigth <=0;
+                width <= 0;
+                tmp_w <= 0;
+                tmp_h <= 0;
+                area<= 0;
                 hasDone <='0';
-                
+                o_we <= '0';
+                o_en <= '1';
                 if i_start='1' then
-                    state <=B_LW;
-                 else
-                    state <=A_RESET;
+                    o_address <= "0000000000000000";
+                    o_en <='1';
+                    
+                    state <=GETHEIGTH;
                 end if;
-            when B_LW=>
-                o_address <= "0000000000000000";
-                o_en <='1';            
-                state <=C_WW_RL;
-            when C_WW_RL=>
+           
+            when GETHEIGTH=>
                 if(i_data="00000000") then
-                    state <=Z;
+                    state <=DATAERROR;
                 else
-                    width <= unsigned(i_data);
-                    tmp_w<= width - 1 ;
+                    heigth <= to_integer(unsigned(i_data));
+                    tmp_h<= heigth;
                     o_address <= "0000000000000001";
-                    o_en <='1';  
-                    state <=D_WL_START;
+                    state <=GETWIDTH;
                 end if;
-                
-            when D_WL_START=>              
+             when GETWIDTH=>
                 if(i_data="00000000") then
-                    state <=Z;
-                else                
-                    heigth<= unsigned(i_data);  
-                    tmp_h <=heigth;
+                    state <=DATAERROR;
+                else
+                    width <= to_integer(unsigned(i_data));
+                    tmp_h<= width;
+                    current_address <= 2;
                     o_address <= "0000000000000010";
-                    o_en <='1'; 
-                    mm_en<='1'; 
-                    current_address <= "0000000000000011";
-                    state <=E;
-                end if;               
-            when E=>
-                
-                if(tmp_h=0 and tmp_w=0) then
-                    state <=F;
-                else               
-                    if(tmp_w=0) then
+                    mm_en <= '1';
+                    state <=READIMAGE;
+                end if;
+             
+            when READIMAGE=>              
+                 if tmp_w = 0 then
+                    tmp_w <= width;
+                    tmp_h <= tmp_h -1;
+                    if tmp_h = 0 then
+                        state <= CHANGE_PIXEL_VALUE;
+                        
+                        --resetting value
+                        tmp_h <= heigth;
                         tmp_w <= width;
-                        tmp_h <=tmp_h -1;
+                        current_address <= 2;
+                        o_address <= "0000000000000010";
+                        mm_en <= '0';
+                        
+                        
+                        --calculate parameter
+                        delta := to_integer(unsigned(max)) - to_integer(unsigned(min))+1;
+                         if delta= 1 then
+                            shift_level:=8;
+                        elsif delta>=2 and delta<=3 then
+                            shift_level := 7;
+                        elsif delta>=4 and delta<=7 then
+                            shift_level := 6;
+                        elsif delta>=8 and delta<=15 then
+                            shift_level := 5;
+                        elsif delta>=16 and delta<=31 then
+                            shift_level := 4;
+                        elsif delta>=32 and delta<=63 then
+                            shift_level := 3;
+                        elsif delta>=64 and delta<=127 then
+                            shift_level := 2;
+                        elsif delta>=128 and delta<=255 then
+                            shift_level := 1;
+            
+                        end if;
                     end if;
-                    tmp_w <= tmp_w -1;                    
-                    current_address <= current_address+1;
-                    o_address <= std_logic_vector(current_address);
-                    o_en <='1';                    
-                    mm_en <= '1'; 
-                end if;   
+                 else
+                    tmp_w <= tmp_w -1;
+                 end if;                
+                 current_address <= current_address +1;
+                 o_address <= std_logic_vector(to_unsigned(current_address,16));
+                 area <= area+1;
+            when CHANGE_PIXEL_VALUE=>
+               if tmp_w = 0 then
+                    tmp_w <= width;
+                    tmp_h <= tmp_h -1;
+                    if tmp_h = 0 then
+                        state <= RST;
+                        
+                        --resetting value
+                        tmp_h <= heigth;
+                        tmp_w <= width;
+                        current_address <= 2;
+                        mm_en <= '0';
+                    end if;
+                 else
+                    tmp_w <= tmp_w -1;
+                 end if;         
                 
-            when F =>    
-            when G =>
-            when H =>
-            when I =>
-            when Z =>
+                 -- change value and write to memory
+                 o_we <= '1';
+                 tmp_value := to_integer(shift_left(unsigned(i_data)-unsigned(min),shift_level));
+                 o_data <= std_logic_vector(to_unsigned(tmp_value,8));
+                 state <= WRITE;
+                
+              
+            when WRITE=>
+                state <=CHANGE_PIXEL_VALUE;
+                o_address <= std_logic_vector(to_unsigned(current_address+area,16));
+                current_address <= current_address +1;
+            when DATAERROR =>
+                state <= RST;
                 
         end case; 
         end if;
