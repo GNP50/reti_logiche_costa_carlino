@@ -1,4 +1,3 @@
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
@@ -98,7 +97,7 @@ end project_reti_logiche;
 
 
 architecture Behavioral of project_reti_logiche is
-    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
+    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,CALCULATE_SHIFT,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
     signal state:signal_type:=RST;
     
     component max_min
@@ -128,13 +127,15 @@ architecture Behavioral of project_reti_logiche is
     
     
 begin
-    mm: max_min port map(i_clk,i_rst,mm_en,i_data,max,min); 
+    mm: max_min port map(i_clk,i_rst,mm_en,i_data,min,max); 
      
     process(i_clk,i_rst)
     --variables for change values
     variable delta:integer range 0 to 255 := 0;
     variable shift_level: integer range 1 to 8 := 0;
-    variable tmp_value:integer range 0 to  7 := 0;
+    variable tmp_value:unsigned(15 downto 0);
+    variable tmp_diff: unsigned(15 downto 0);
+    
     
     begin
         o_done <= '0';
@@ -196,15 +197,33 @@ begin
                     tmp_w <= width-1;
                     tmp_h <= tmp_h-1;
                     if tmp_h = 0 then
-                        state <= CHANGE_PIXEL_VALUE;
-                        
-                        --resetting value
-                        tmp_h <= heigth;
+                        state <= CALCULATE_SHIFT;   
+                        o_address <= std_logic_vector(to_unsigned(current_address,16));
+                    else
+                        current_address <= current_address +1;
+                        o_address <= std_logic_vector(to_unsigned(current_address,16));
+                        state <= READIMAGE;
+                    end if;
+                 else
+                    current_address <= current_address +1;
+                    tmp_w <= tmp_w -1;
+                    o_address <= std_logic_vector(to_unsigned(current_address,16));
+                    state <= READIMAGE;
+                 end if;                
+                 
+            when CALCULATE_SHIFT=>
+                --resetting value
+                o_en <='1';
+                        tmp_h <= heigth-1;
                         tmp_w <= width-1;
+                        state <= CHANGE_PIXEL_VALUE;   
+                        out_off <= current_address-2;
+
+                        
+                        
                         current_address <= 2;
                         o_address <= "0000000000000010";
                         mm_en <= '0';
-                        out_off <= current_address-2;
                         --calculate parameter
                         delta := to_integer(unsigned(max)) - to_integer(unsigned(min))+1;
                          if delta= 1 then
@@ -225,19 +244,7 @@ begin
                             shift_level := 1;
             
                         end if;
-                    else
-                        current_address <= current_address +1;
-                        o_address <= std_logic_vector(to_unsigned(current_address,16));
-                        state <= READIMAGE;
-                    end if;
-                 else
-                    current_address <= current_address +1;
-                    tmp_w <= tmp_w -1;
-                    o_address <= std_logic_vector(to_unsigned(current_address,16));
-                    state <= READIMAGE;
-                 end if;                
-                 
-                 
+            
             when CHANGE_PIXEL_VALUE=>
                o_en <='1';
 
@@ -251,11 +258,29 @@ begin
                 
                  -- change value and write to memory
                  o_we <= '1';
-                 tmp_value := to_integer(shift_left(unsigned(i_data)-unsigned(min),shift_level));
-                 o_data <= std_logic_vector(to_unsigned(tmp_value,8));
+                 
+                 tmp_diff(15 downto 8) := "00000000";
+                 tmp_diff(7 downto 0) := unsigned(i_data)-unsigned(min);
+                 tmp_value := shift_left(tmp_diff,shift_level);
+                 if tmp_value(15 downto 8) = "00000000" then
+                    o_data <= std_logic_vector(tmp_value(7 downto 0));
+                 else
+                    o_data <= "11111111";
+                 end if;
+                 
                  state <= WRITE;
                 
                 o_address <= std_logic_vector(to_unsigned(out_off+current_address,16));
+                if tmp_w = 0 and tmp_h = 0 then
+                     state <= DONE;
+                     o_done <= '1';
+                     --resetting value
+                     tmp_h <= heigth-1;
+                     tmp_w <= width-1;
+                     current_address <= 2;
+                     mm_en <= '0';
+                     o_we <= '0';
+                 end if;
 
             when WRITE=>
                 o_en <='1';
@@ -264,16 +289,9 @@ begin
                 o_address <= std_logic_vector(to_unsigned(current_address,16));
                 current_address <= current_address +1;
                 o_we <= '0';
-                if tmp_w = 0 and tmp_h = 0 then
-                     state <= DONE;
-                        o_done <= '1';
-                        --resetting value
-                        tmp_h <= heigth-1;
-                        tmp_w <= width-1;
-                        current_address <= 2;
-                        mm_en <= '0';
-                end if;
+
             when DONE =>
+                o_done <= '1';
                 if i_start = '0' then
                     state <= RST;
                 else
