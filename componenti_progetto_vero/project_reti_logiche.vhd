@@ -157,6 +157,7 @@ begin
                 out_off<= 0;
                 o_we <= '0';
                 o_address <= "0000000000000000";
+                current_address <=0;
 
                 if i_start='1' then
                     o_en <='1';
@@ -215,7 +216,7 @@ begin
                  
             when WAIT_LAST_READ =>
                 state <= CALCULATE_SHIFT;     
-                          
+                mm_en <= '1';          
                  
             when CALCULATE_SHIFT=>
                 --resetting value
@@ -227,7 +228,7 @@ begin
 
                         
                         
-                        current_address <= 2;
+                        current_address <= 3;
                         o_address <= "0000000000000010";
                         mm_en <= '0';
                         --calculate parameter
@@ -285,15 +286,16 @@ begin
                      tmp_w <= width-1;
                      current_address <= 2;
                      mm_en <= '0';
-                     o_we <= '0';
+                     --o_we <= '0';
                  end if;
 
             when WRITE=>
                 o_en <='1';
 
                 state <=CHANGE_PIXEL_VALUE;
-                o_address <= std_logic_vector(to_unsigned(current_address,16));
                 current_address <= current_address +1;
+                o_address <= std_logic_vector(to_unsigned(current_address,16));
+                
                 o_we <= '0';
 
             when DONE =>
