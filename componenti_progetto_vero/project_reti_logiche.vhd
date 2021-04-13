@@ -35,7 +35,7 @@ begin
         if(i_rst = '1') then
             min_s<=255;
             max_s<=0;
-        elsif falling_edge(i_clk) and i_en='1' then
+        elsif rising_edge(i_clk) and i_en='1' then
             if(unsigned(i_current_pixel_value)>max_s) then
                 max_s <= to_integer(unsigned(i_current_pixel_value));
             elsif(unsigned(i_current_pixel_value)<min_s) then
@@ -97,7 +97,7 @@ end project_reti_logiche;
 
 
 architecture Behavioral of project_reti_logiche is
-    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,CALCULATE_SHIFT,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
+    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,WAIT_LAST_READ,CALCULATE_SHIFT,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
     signal state:signal_type:=RST;
     
     component max_min
@@ -120,15 +120,16 @@ architecture Behavioral of project_reti_logiche is
     signal tmp_w: integer range 0 to 255 := 0;
     signal tmp_h:integer range 0 to 255 := 0;
     signal max:std_logic_vector(7 downto 0);
-    signal min:std_logic_vector(7 downto 0);
-    
+    signal min:std_logic_vector(7 downto 0);    
     signal out_off: integer range 0 to 65535 := 0;
+    signal int_rst: std_logic;
+    signal int_rst_cmd: std_logic;
    
     
     
 begin
-    mm: max_min port map(i_clk,i_rst,mm_en,i_data,min,max); 
-     
+    mm: max_min port map(i_clk,int_rst,mm_en,i_data,min,max); 
+    int_rst <=  '1' when (state = RST or i_rst='1' ) else '0';
     process(i_clk,i_rst)
     --variables for change values
     variable delta:integer range 0 to 255 := 0;
@@ -140,7 +141,7 @@ begin
     begin
         o_done <= '0';
         o_en <= '0';
-
+        mm_en <= '0';
         if(i_rst = '1') then
             state <= RST;
             
@@ -182,22 +183,23 @@ begin
                     tmp_h<= heigth-1;
                     current_address <= 2;
                     o_address <= "0000000000000010";
-                    mm_en <= '1';
                     state <=GETWIDTH;
                 end if;
             when GETWIDTH=>
                 o_en <='1';
 
                 tmp_w<= width-1;
+                mm_en <= '1';
                 state <= READIMAGE;
             when READIMAGE=>     
                  o_en <='1';
+                 mm_en <= '1';
          
                  if tmp_w = 0 then
                     tmp_w <= width-1;
                     tmp_h <= tmp_h-1;
                     if tmp_h = 0 then
-                        state <= CALCULATE_SHIFT;   
+                        state <= WAIT_LAST_READ;   
                         o_address <= std_logic_vector(to_unsigned(current_address,16));
                     else
                         current_address <= current_address +1;
@@ -209,7 +211,11 @@ begin
                     tmp_w <= tmp_w -1;
                     o_address <= std_logic_vector(to_unsigned(current_address,16));
                     state <= READIMAGE;
-                 end if;                
+                 end if; 
+                 
+            when WAIT_LAST_READ =>
+                state <= CALCULATE_SHIFT;     
+                          
                  
             when CALCULATE_SHIFT=>
                 --resetting value
