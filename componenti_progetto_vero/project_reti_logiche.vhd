@@ -97,7 +97,7 @@ end project_reti_logiche;
 
 
 architecture Behavioral of project_reti_logiche is
-    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,WAIT_LAST_READ,CALCULATE_SHIFT,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
+    type signal_type is(RST,ASKWIDTH,GETWIDTH,ASKHEIGTH,READIMAGE,WAIT_LAST_READ,WAIT_LAST_MM,CALCULATE_SHIFT,CHANGE_PIXEL_VALUE,WRITE,DONE); --else
     signal state:signal_type:=RST;
     
     component max_min
@@ -124,7 +124,8 @@ architecture Behavioral of project_reti_logiche is
     signal out_off: integer range 0 to 65535 := 0;
     signal int_rst: std_logic;
     signal int_rst_cmd: std_logic;
-   
+    signal shift_level: integer range 1 to 8 := 0;
+  
     
     
 begin
@@ -133,7 +134,6 @@ begin
     process(i_clk,i_rst)
     --variables for change values
     variable delta:integer range 0 to 255 := 0;
-    variable shift_level: integer range 1 to 8 := 0;
     variable tmp_value:unsigned(15 downto 0);
     variable tmp_diff: unsigned(15 downto 0);
     
@@ -158,6 +158,7 @@ begin
                 o_we <= '0';
                 o_address <= "0000000000000000";
                 current_address <=0;
+                shift_level <= 0;
 
                 if i_start='1' then
                     o_en <='1';
@@ -215,9 +216,14 @@ begin
                  end if; 
                  
             when WAIT_LAST_READ =>
+                state <= WAIT_LAST_MM;     
+                mm_en <= '1';
+
+            
+            when WAIT_LAST_MM =>
                 state <= CALCULATE_SHIFT;     
-                mm_en <= '1';          
-                 
+               
+             
             when CALCULATE_SHIFT=>
                 --resetting value
                 o_en <='1';
@@ -233,23 +239,24 @@ begin
                         mm_en <= '0';
                         --calculate parameter
                         delta := to_integer(unsigned(max)) - to_integer(unsigned(min))+1;
-                         if delta= 1 then
-                            shift_level:=8;
-                        elsif delta>=2 and delta<=3 then
-                            shift_level := 7;
-                        elsif delta>=4 and delta<=7 then
-                            shift_level := 6;
-                        elsif delta>=8 and delta<=15 then
-                            shift_level := 5;
-                        elsif delta>=16 and delta<=31 then
-                            shift_level := 4;
-                        elsif delta>=32 and delta<=63 then
-                            shift_level := 3;
-                        elsif delta>=64 and delta<=127 then
-                            shift_level := 2;
-                        elsif delta>=128 and delta<=255 then
-                            shift_level := 1;
-            
+                         if delta< 2 then
+                            shift_level<=8;
+                        elsif delta<4 then
+                            shift_level <= 7;
+                        elsif delta<8 then
+                            shift_level <= 6;
+                        elsif delta<16 then
+                            shift_level <= 5;
+                        elsif delta<32 then
+                            shift_level <= 4;
+                        elsif delta<64 then
+                            shift_level <= 3;
+                        elsif delta<128 then
+                            shift_level <= 2;
+                        elsif delta<256 then
+                            shift_level <= 1;
+                        else
+                            shift_level <= 0;
                         end if;
             
             when CHANGE_PIXEL_VALUE=>
