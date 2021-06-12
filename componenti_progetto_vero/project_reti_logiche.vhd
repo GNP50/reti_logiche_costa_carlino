@@ -225,7 +225,7 @@ BEGIN
 		END IF;
 	END PROCESS;
 
-	PROCESS (i_clk, i_rst, state, i_start, i_data, end_read)
+	PROCESS (i_clk, i_rst, state, i_start, end_read)
 	BEGIN
 		next_state <= state;
 		CASE state IS
@@ -240,7 +240,11 @@ BEGIN
 			WHEN READ_NROW =>
 				next_state <= PREPARE_READIMAGE;
 			WHEN PREPARE_READIMAGE =>
+			IF end_read = '1' and not (width=1 and height = 1) THEN
+			     next_state<=done;
+			     else
 				next_state <= READIMAGE;
+				end if;
 			WHEN READIMAGE =>
 				IF end_read = '1' THEN
 					next_state <= WAIT_LAST_READ;
