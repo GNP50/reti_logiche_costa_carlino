@@ -21,7 +21,7 @@ ARCHITECTURE Behavioral OF max_min IS
 	SIGNAL min_s : INTEGER RANGE 0 TO 255;
 	SIGNAL delta : STD_LOGIC_VECTOR (8 DOWNTO 0);
 BEGIN
-	PROCESS (i_clk, i_rst)
+	PROCESS (i_clk, i_rst,i_en,min_s, max_s)
 	BEGIN
 		o_max <= std_logic_vector(to_unsigned(max_s, 8));
 		o_min <= std_logic_vector(to_unsigned(min_s, 8));
@@ -55,7 +55,6 @@ END Behavioral;
 
 LIBRARY IEEE;
 USE IEEE.STD_LOGIC_1164.ALL;
-USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE ieee.numeric_std.ALL;
 
 ENTITY counter IS
@@ -64,50 +63,50 @@ ENTITY counter IS
 		i_clk : IN std_logic;
 		i_rst : IN std_logic;
 		i_en : IN std_logic;
-		i_width : IN INTEGER RANGE 0 TO 255 := 0;
-		i_height : IN INTEGER RANGE 0 TO 255 := 0;
-		i_offset : IN INTEGER RANGE 0 TO 65535 := 0;
-		o_count : OUT INTEGER RANGE 0 TO 65535 := 0;
-		o_end : OUT std_logic
-	);
+		i_width : IN INTEGER RANGE 0 TO 255;
+		i_height : IN INTEGER RANGE 0 TO 255;
+		i_offset : IN INTEGER RANGE 0 TO 65535;
+		o_count : OUT INTEGER RANGE 0 TO 65535;
+		o_end : OUT std_logic	
+		);
 END counter;
 
 ARCHITECTURE Behavioral OF counter IS
 	SIGNAL cur_w : INTEGER RANGE 0 TO 255;
 	SIGNAL cur_h : INTEGER RANGE 0 TO 255;
-	SIGNAL cur_count : INTEGER RANGE 0 TO 65535 := 0;
-	SIGNAL next_w: INTEGER RANGE 0 TO 65535 := 0;
-	SIGNAL next_h: INTEGER RANGE 0 TO 65535 := 0;
-	SIGNAL next_count: INTEGER RANGE 0 TO 65535 := 0;
+	SIGNAL cur_count : INTEGER RANGE 0 TO 65535;
+	SIGNAL next_w: INTEGER RANGE 0 TO 255;
+	SIGNAL next_h: INTEGER RANGE 0 TO 255;
+	SIGNAL next_count: INTEGER RANGE 0 TO 65535;
 	SIGNAL int_end: std_logic;
 BEGIN    
-	PROCESS (i_clk, i_rst)
+	PROCESS (i_clk, i_rst, int_end, i_en)
 	BEGIN
         if(i_rst='1') then
             cur_count <= 0;
             cur_w<=1;
             cur_h<=1;
-        ELSIF rising_edge(i_clk) and i_clk='1' and i_en ='1' and int_end/='1' THEN 
+        ELSIF rising_edge(i_clk) and i_clk='1' and i_en ='1' and int_end='0' THEN 
             cur_count<=next_count;
             cur_w<=next_w;
             cur_h<=next_h;
         end if;	
 	END PROCESS;
+	next_count <= cur_count when int_end='1' else cur_count+1;
 	
-	next_count <= cur_count when int_end='1' else cur_count+1 when i_en='1' else cur_count;
 	next_w <= 
-	    cur_w when int_end ='1' or i_en = '0' else
+	    cur_w when int_end ='1' else
 	    cur_w+1 when cur_w<i_width else 
 	    1;
+	    
 	next_h <= 
 	    cur_h when cur_w /= i_width or int_end='1' else	
-	    cur_h+1 when i_en='1' else 
-	    cur_h;
+	    cur_h+1;
 	
 	int_end <='1' when (cur_w = i_width and cur_h = i_height) or i_width=0 or i_height=0 else '0';
 	
 	o_count <=i_offset + cur_count;
-	o_end<=int_end when i_en='1' else '0';
+	o_end<=int_end;
 
 END Behavioral;
 
@@ -131,7 +130,7 @@ ENTITY project_reti_logiche IS
 END project_reti_logiche;
 ARCHITECTURE Behavioral OF project_reti_logiche IS
     TYPE s IS(RST, START, ASKWIDTH, GETWIDTH, ASKHEIGHT, READIMAGE, WAIT_LAST_READ, WAIT_LAST_MM, CALCULATE_SHIFT, CHANGE_PIXEL_VALUE, WRITE, DONE); 
-    SIGNAL state, next_state : s := RST;
+    SIGNAL state, next_state : s;
 
     COMPONENT max_min
         PORT (
@@ -150,24 +149,24 @@ ARCHITECTURE Behavioral OF project_reti_logiche IS
 		i_clk : IN std_logic;
 		i_rst : IN std_logic;
 		i_en : IN std_logic;
-		i_width : IN INTEGER RANGE 0 TO 255 := 0;
-		i_height : IN INTEGER RANGE 0 TO 255 := 0;
-		i_offset : IN INTEGER RANGE 0 TO 65535 := 0;
-		o_count : OUT INTEGER RANGE 0 TO 65535 := 0;
+		i_width : IN INTEGER RANGE 0 TO 255;
+		i_height : IN INTEGER RANGE 0 TO 255;
+		i_offset : IN INTEGER RANGE 0 TO 65535;
+		o_count : OUT INTEGER RANGE 0 TO 65535;
 		o_end : OUT std_logic
 	);
     END component counter;
 
-    SIGNAL mm_en : std_logic := '0';
-    SIGNAL width : INTEGER RANGE 0 TO 255 := 0;
-    SIGNAL height : INTEGER RANGE 0 TO 255 := 0;
-    SIGNAL read_address : INTEGER RANGE 0 TO 65535 := 0;
-    SIGNAL write_address : INTEGER RANGE 0 TO 65535 := 0;
+    SIGNAL mm_en : std_logic;
+    SIGNAL width : INTEGER RANGE 0 TO 255;
+    SIGNAL height : INTEGER RANGE 0 TO 255;
+    SIGNAL read_address : INTEGER RANGE 0 TO 65535;
+    SIGNAL write_address : INTEGER RANGE 0 TO 65535;
     SIGNAL max : std_logic_vector(7 DOWNTO 0);
     SIGNAL min : std_logic_vector(7 DOWNTO 0);
-    SIGNAL out_off : INTEGER RANGE 0 TO 65535 := 0;
+    SIGNAL out_off : INTEGER RANGE 0 TO 65535;
     SIGNAL int_rst : std_logic;
-    SIGNAL shift_level : INTEGER RANGE 0 TO 8 := 0;
+    SIGNAL shift_level : INTEGER RANGE 0 TO 8;
     SIGNAL end_read: std_logic;
     SIGNAL increment_read_clk: std_logic;
     SIGNAL increment_write_clk: std_logic;
@@ -178,9 +177,7 @@ ARCHITECTURE Behavioral OF project_reti_logiche IS
     SIGNAL tmp_value : unsigned(15 DOWNTO 0);
     SIGNAL tmp_diff : unsigned(15 DOWNTO 0);
 BEGIN
-    mm : max_min
-    PORT MAP(i_clk => i_clk, i_rst => int_rst, i_en => mm_en, i_current_pixel_value => i_data, o_min => min, o_max => max, o_shift => shift_level);
-    
+    mm : max_min PORT MAP(i_clk => i_clk, i_rst => int_rst, i_en => mm_en, i_current_pixel_value => i_data, o_min => min, o_max => max, o_shift => shift_level);
     counter_read: counter port map (i_clk=>i_clk,i_rst=>read_rst,i_en=>read_en,i_width=>width,i_height=>height,i_offset=>2,o_count=>read_address,o_end=>end_read); 
     counter_write: counter port map (i_clk=>i_clk,i_rst=>write_rst,i_en=>write_en,i_width=>width,i_height=>height,i_offset=>out_off,o_count=>write_address,o_end=>open); 
     
@@ -229,7 +226,7 @@ BEGIN
         std_logic_vector(to_unsigned(read_address,16)) when state = ASKWIDTH or state = GETWIDTH or state = READIMAGE or state = WRITE or state = CALCULATE_SHIFT or state = WAIT_LAST_MM else 
         std_logic_vector(to_unsigned(write_address,16));
 
-    PROCESS (i_clk, i_rst) 
+    PROCESS (i_clk, i_rst, state, i_start, i_data, end_read) 
         BEGIN
             next_state <= state;
             CASE state IS
@@ -259,21 +256,17 @@ BEGIN
                     ELSE
                         next_state <= READIMAGE;
                     END IF;
-
                 WHEN WAIT_LAST_READ => 
                     next_state <= WAIT_LAST_MM;
                 WHEN WAIT_LAST_MM => 
                     next_state <= CALCULATE_SHIFT;
-
                 WHEN CALCULATE_SHIFT => 
                     next_state <= CHANGE_PIXEL_VALUE; 
-
                 WHEN CHANGE_PIXEL_VALUE => 
                     next_state <= WRITE;
                     IF end_read='1' THEN
                         next_state <= DONE;
                     END IF;
-
                 WHEN WRITE => 
                     next_state <= CHANGE_PIXEL_VALUE;
                 WHEN DONE => 
@@ -291,7 +284,7 @@ BEGIN
         tmp_diff(7 DOWNTO 0) <= unsigned(i_data) - unsigned(min);
         tmp_value <= shift_left(tmp_diff, shift_level);
         
-        o_data <= std_logic_vector(tmp_value(7 DOWNTO 0)) when tmp_value(15 DOWNTO 8) = "00000000" else "11111111";
+        o_data <= "00000000" when state /= CHANGE_PIXEl_VALUE else std_logic_vector(tmp_value(7 DOWNTO 0)) when tmp_value(15 DOWNTO 8) = "00000000" else "11111111";
         
         PROCESS (i_clk, i_rst)
             BEGIN
