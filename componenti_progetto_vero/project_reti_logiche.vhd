@@ -95,12 +95,11 @@ BEGIN
 	next_count <= cur_count when int_end='1' else cur_count+1;
 	
 	next_w <= 
-	    cur_w when int_end ='1' else
 	    cur_w+1 when cur_w<i_width else 
 	    1;
 	    
 	next_h <= 
-	    cur_h when cur_w /= i_width or int_end='1' else	
+	    cur_h when cur_w /= i_width else	
 	    cur_h+1;
 	
 	int_end <='1' when (cur_w = i_width and cur_h = i_height) or i_width=0 or i_height=0 else '0';
@@ -215,7 +214,7 @@ BEGIN
     BEGIN
         IF (i_rst = '1') THEN
             state <= RST;
-        ELSIF rising_edge(i_clk) THEN
+        ELSIF rising_edge(i_clk) and i_clk = '1' THEN
             state <= next_state;
         END IF;
     END PROCESS;
@@ -237,17 +236,9 @@ BEGIN
                 WHEN START => 
                     next_state <= ASKheight;
                 WHEN ASKheight => 
-                    IF (i_data = "00000000") THEN
-                        next_state <= DONE;
-                    ELSE
-                        next_state <= ASKWIDTH;
-                    END IF;
+                    next_state <= ASKWIDTH;
                 WHEN ASKWIDTH => 
-                    IF (i_data = "00000000") THEN
-                        next_state <= DONE;
-                    ELSE
-                        next_state <= GETWIDTH;
-                    END IF;
+                    next_state <= GETWIDTH;
                 WHEN GETWIDTH => 
                     next_state <= READIMAGE;
                 WHEN READIMAGE =>  
@@ -278,17 +269,17 @@ BEGIN
             END CASE;
         END PROCESS;
  
-        mm_en <= '1' WHEN state = ASKWIDTH OR state = GETWIDTH OR state = READIMAGE OR state = WAIT_LAST_READ ELSE '0';
+        mm_en <= '1' WHEN state = READIMAGE OR state = WAIT_LAST_READ ELSE '0';
         
         tmp_diff(15 DOWNTO 8) <= "00000000";
         tmp_diff(7 DOWNTO 0) <= unsigned(i_data) - unsigned(min);
-        tmp_value <= shift_left(tmp_diff, shift_level);
+        tmp_value <= tmp_diff sll shift_level;
         
-        o_data <= "00000000" when state /= CHANGE_PIXEl_VALUE else std_logic_vector(tmp_value(7 DOWNTO 0)) when tmp_value(15 DOWNTO 8) = "00000000" else "11111111";
+        o_data <= "00000000" when state /= CHANGE_PIXEl_VALUE and state /= WRITE else std_logic_vector(tmp_value(7 DOWNTO 0)) when tmp_value(15 DOWNTO 8) = "00000000" else "11111111";
         
         PROCESS (i_clk, i_rst)
             BEGIN
-                IF rising_edge(i_clk) THEN
+                IF rising_edge(i_clk) and i_clk='1' THEN
                     CASE state IS
                         WHEN RST => 
                             height <= 0;
